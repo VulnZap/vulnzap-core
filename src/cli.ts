@@ -43,38 +43,17 @@ program
 program
   .command('secure')
   .description('Start the MCP security bridge to protect your AI coding')
-  .option('--mcp', 'Use Model Context Protocol for IDE integration')
   .option('--ide <ide-name>', 'Specify IDE integration (cursor, claude-code, windsurf)')
   .option('--port <port>', 'Port to use for MCP server', '3456')
   .option('--api-key <key>', 'Premium API key for enhanced features')
   .action(async (options) => {
-    displayBanner();
-
-    const checkAlreadyInitialized = await checkInit();
-    if (!checkAlreadyInitialized) {
-      console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
-      process.exit(1);
-    }
-
-    console.log(chalk.yellow('You are on a OSS version. Some features may be unavailable.'));
-
-    const spinner = ora('Starting VulnZap security bridge...\n').start();
-
     try {
       await startMcpServer({
         useMcp: options.mcp || true,
         ide: options.ide || 'cursor',
         port: parseInt(options.port, 10),
       });
-
-      spinner.succeed('VulnZap security bridge is running');
-      console.log(chalk.green('✓') + ' MCP protocol active and listening for AI-generated code');
-      console.log(chalk.green('✓') + ' Vulnerability database connected');
-      console.log(chalk.green('✓') + ' Real-time scanning enabled');
-
-      console.log('Press Ctrl+C to stop the security bridge');
     } catch (error: any) {
-      spinner.fail('Failed to start VulnZap security bridge');
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
     }
