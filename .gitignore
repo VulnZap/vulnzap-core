@@ -1,0 +1,68 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# dotenv environment variables file
+.env
+.env.test
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.development
+.env.production
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Build output
+dist/
+build/
+out/
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Cache directories
+.cache/
+.parcel-cache/
+cache/
+
+# Local History for Visual Studio Code
+.history/
+
+# NVD API cache
+cache/
+
+# Supabase keys
+.supabase/
+
+# Stripe keys
+.stripe/
+
+# User data directory (for development)
+.vulnzap/ 
