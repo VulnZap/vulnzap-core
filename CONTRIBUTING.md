@@ -1,119 +1,96 @@
-# Contributing to VulnZap-core
+# Contributing to VulnZap
 
 First off, thank you for considering contributing to VulnZap! It's people like you that make VulnZap such a great tool.
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by the VulnZap [Code of Conduct](CODE_OF_CONDUCT.md). Please read it to understand the expectations for our community.
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
 ## How Can I Contribute?
 
 ### Reporting Bugs
 
-This section guides you through submitting a bug report for VulnZap. Following these guidelines helps maintainers and the community understand your report, reproduce the behavior, and find related reports.
+Before creating bug reports, please check the issue list as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
 
-Before creating bug reports, please check [the issue list](https://github.com/vulnzap/vulnzap/issues) as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible.
+* Use a clear and descriptive title
+* Describe the exact steps which reproduce the problem
+* Provide specific examples to demonstrate the steps
+* Describe the behavior you observed after following the steps
+* Explain which behavior you expected to see instead and why
+* Include any error messages or logs
 
 ### Suggesting Enhancements
 
-This section guides you through submitting an enhancement suggestion for VulnZap, including completely new features and minor improvements to existing functionality.
+Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
 
-Before creating enhancement suggestions, please check [the issue list](https://github.com/vulnzap/vulnzap/issues) as you might find out that you don't need to create one. When you are creating an enhancement suggestion, please include as many details as possible.
+* A clear and descriptive title
+* A detailed description of the proposed functionality
+* Explain why this enhancement would be useful
+* List any similar features in other tools if applicable
 
 ### Pull Requests
 
-The process described here has several goals:
+* Fork the repo and create your branch from `main`
+* If you've added code that should be tested, add tests
+* Ensure the test suite passes
+* Make sure your code lints
+* Update the documentation
 
-- Maintain VulnZap's quality
-- Fix problems that are important to users
-- Engage the community in working toward the best possible VulnZap
-- Enable a sustainable system for VulnZap's maintainers to review contributions
+## Development Setup
 
-Please follow these steps to have your contribution considered by the maintainers:
+1. Fork and clone the repo
+```bash
+git clone https://github.com/VulnZap/vulnzap-core.git
+```
 
-1. Fork the repository
-2. Create a new branch for your feature or bugfix (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting to ensure your changes meet quality standards
-5. Commit your changes (`git commit -m 'Add some amazing feature'`)
-6. Push to your branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+2. Install dependencies
+```bash
+npm install
+```
 
-While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional design work, tests, or other changes before your pull request can be ultimately accepted.
+3. Create a branch for your changes
+```bash
+git checkout -b feature/your-feature-name
+```
 
-## Styleguides
+4. Set up environment variables
+```bash
+VULNZAP_GITHUB_TOKEN=your_github_token
+VULNZAP_NVD_API_KEY=your_nvd_api_key
+```
 
-### Git Commit Messages
+## Style Guide
+
+* Use TypeScript for all new code
+* Follow the existing code style
+* Use meaningful variable and function names
+* Add comments for complex logic
+* Keep functions small and focused
+* Use async/await instead of callbacks
+
+## Commit Messages
 
 * Use the present tense ("Add feature" not "Added feature")
 * Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 * Limit the first line to 72 characters or less
 * Reference issues and pull requests liberally after the first line
-* Consider starting the commit message with an applicable emoji:
-    * 🐛 `:bug:` when fixing a bug
-    * ✨ `:sparkles:` when adding a new feature
-    * 📚 `:books:` when adding or updating documentation
-    * 🧹 `:broom:` when refactoring code
-    * 🧪 `:test_tube:` when adding tests
-    * 🔧 `:wrench:` when updating configuration files
 
-### JavaScript/TypeScript Styleguide
+## Documentation
 
-All JavaScript/TypeScript code is linted with ESLint. To check your code formatting, run:
+* Update the README.md with details of changes to the interface
+* Update the API documentation for any modified endpoints
+* Add examples for new features
+* Document any new environment variables or dependencies
 
-```bash
-npm run lint
-```
+## Release Process
 
-To automatically fix most linting issues, run:
-
-```bash
-npm run lint:fix
-```
-
-### Testing
-
-Please include tests for any new functionality or bugfix. We use Jest for testing. To run tests:
-
-```bash
-npm test
-```
-
-## Development Setup
-
-To set up VulnZap for local development:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/vulnzap/vulnzap.git
-```
-
-2. Install dependencies:
-```bash
-cd vulnzap
-npm install
-```
-
-3. Create a `.env` file with required configuration:
-```bash
-cp .env.example .env
-# Edit .env with your configuration values
-```
-
-4. Set up the database:
-```bash
-npm run db:seed
-```
-
-5. Run in development mode:
-```bash
-npm run dev
-```
-
-## Financial Contributions
-
-We accept financial contributions through [Open Collective](https://opencollective.com/vulnzap). These contributions will help us improve VulnZap and support the open-source community.
+1. Update the version in package.json
+2. Update CHANGELOG.md
+3. Create a new release on GitHub
+4. Publish to npm
 
 ## Questions?
 
-If you have any questions, please feel free to join our [Discord](https://discord.gg/vulnzap) server or open an issue on GitHub. 
+Feel free to open an issue with your question or contact the maintainers directly.
+
+Thank you for contributing to VulnZap! 🚀 

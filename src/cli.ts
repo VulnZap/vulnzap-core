@@ -123,7 +123,7 @@ program
 // Command: vulnzap check
 program
   .command('check <package>')
-  .description('Check a package for vulnerabilities (format: npm:package-name@version)')
+  .description('Check a package for vulnerabilities (format: ecosystem:package-name@version)')
   .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip)')
   .option('-v, --version <version>', 'Package version')
   .action(async (packageInput, options) => {
@@ -147,32 +147,41 @@ program
     }
 
     // Parse package input
-    if (packageInput.includes('@') && !packageInput.startsWith('@')) {
-      const packageENV = packageInput.split(':');
-      packageEcosystem = packageENV[0];
-      [packageName, packageVersion] = packageENV[1].split('@');
+    const packageFormat = /^(npm|pip):([^@]+)@(.+)$/;
+    const match = packageInput.match(packageFormat);
+
+    if (match) {
+      [, packageEcosystem, packageName, packageVersion] = match;
+    } else if (packageInput.includes('@') && !packageInput.startsWith('@')) {
+      // Fallback for old format package@version
+      [packageName, packageVersion] = packageInput.split('@');
+      packageEcosystem = options.ecosystem;
     } else {
       packageName = packageInput;
       packageVersion = options.version;
+      packageEcosystem = options.ecosystem;
     }
 
     if (!packageVersion) {
       console.error(chalk.red('Error: Package version is required'));
-      console.log('Format: vulnzap check package-name@version');
-      console.log('Or: vulnzap check package-name --version <version>');
+      console.log('Format: vulnzap check ecosystem:package-name@version');
+      console.log('Example: vulnzap check npm:express@4.17.1');
+      console.log('Or: vulnzap check package-name --ecosystem npm --version 4.17.1');
       process.exit(1);
     }
 
-    if (!options.ecosystem && !packageEcosystem) {
+    if (!packageEcosystem) {
       console.error(chalk.red('Error: Package ecosystem is required'));
-      console.log('Format: vulnzap check package-name@version --ecosystem <ecosystem>');
+      console.log('Format: vulnzap check ecosystem:package-name@version');
+      console.log('Example: vulnzap check npm:express@4.17.1');
+      console.log('Or: vulnzap check package-name --ecosystem npm --version 4.17.1');
       process.exit(1);
     }
 
-    const spinner = ora(`Checking ${options.ecosystem}:${packageName}@${packageVersion} for vulnerabilities...`).start();
+    const spinner = ora(`Checking ${packageEcosystem}:${packageName}@${packageVersion} for vulnerabilities...`).start();
 
     try {
-      const result = await checkVulnerability(options.ecosystem, packageName, packageVersion);
+      const result = await checkVulnerability(packageEcosystem, packageName, packageVersion);
 
       spinner.stop();
 
