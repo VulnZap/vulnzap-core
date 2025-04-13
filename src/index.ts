@@ -71,7 +71,7 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
       resources: {},
       tools: {
         "auto-vulnerability-scan": {
-          description: "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages. The format required for this tool is:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\"\n}\n```",
+          description: "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages. The format required for this tool is:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\",\n  \"ecosystem\": \"npm\"\n}\n```",
           parameters: {
             command: {
               type: "string",
@@ -84,9 +84,13 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
             version: {
               type: "string",
               description: "The version of the package to install"
+            },
+            ecosystem: {
+              type: "string",
+              description: "The ecosystem of the package to install"
             }
           },          
-        }
+        },
       }
     },
     instructions: "ALWAYS RUN TOOLS IN THIS SERVER BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages."
@@ -180,34 +184,49 @@ function setupVulnerabilityResource(server: McpServer): void {
   // Add npm install interception
   server.tool(
     "auto-vulnerability-scan",
-    "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check.. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\"\n}\n```",
+    "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check.. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages. The format required for this tool is:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\",\n  \"ecosystem\": \"npm\"\n}\n```",
     {
       parameters: z.object({
         command: z.string(),
         packageName: z.string(),
+        ecosystem: z.string(),
         version: z.string().optional()
       }).describe("A object containing the command, packageName, and version which the agent is trying to install")
     },
     async ({ parameters }) => {
       try {
-        const { command, packageName, version } = parameters;
+        const { command, packageName, ecosystem, version } = parameters;
         
         if (command.includes('install') || command.includes('add')) {
-          const result = await checkVulnerability('npm', packageName, version || 'latest');
-          if (result.isVulnerable) {
+          const result = await checkVulnerability(ecosystem, packageName, version || 'latest');
+          
+          if (result.length === 0) {
             return {
               content: [{
                 type: "text",
-                text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n` +
-                      result.advisories?.map(adv => 
-                        `- ${adv.title} (${adv.severity})\n` +
-                        `  CVE: ${adv.cve_id || 'N/A'}\n` +
-                        `  Description: ${adv.description}\n` +
-                        `  Fixed in: ${result.fixedVersions?.join(', ') || 'N/A'}`
-                      ).join('\n\n') + 
-                      `\n\nRecommendation: ${result.message}`
+                text: `✅ ${packageName}@${version} appears to be safe to install.`
               }]
             };
+          }
+
+          const formattedResults = [] as any[];
+
+          for (const advisory of result) {
+             formattedResults.push({
+              isVulnerable: advisory.isVulnerable,
+              advisories: advisory.advisories,
+              message: advisory.message,
+              error: advisory.error,
+              isUnknown: advisory.isUnknown,
+              sources: advisory.sources
+             }) 
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities: ${JSON.stringify(formattedResults)}\n\n`
+            }]
           }
         }
         return {
