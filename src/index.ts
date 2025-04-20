@@ -232,7 +232,7 @@ function setupVulnerabilityResource(server: McpServer): void {
         return {
           content: [{
             type: "text",
-            text: `✅ ${packageName}@${version} appears to be safe to install.`
+            text: `No relevent data found, its upto you to make the decision.`
           }]
         };
       } catch (error: any) {

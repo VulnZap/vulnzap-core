@@ -45,7 +45,6 @@ program
   .description('Start the MCP security bridge to protect your AI coding')
   .option('--ide <ide-name>', 'Specify IDE integration (cursor, claude-code, windsurf)')
   .option('--port <port>', 'Port to use for MCP server', '3456')
-  .option('--api-key <key>', 'Premium API key for enhanced features')
   .action(async (options) => {
     try {
       await startMcpServer({
@@ -205,6 +204,7 @@ program
       fs.writeFileSync(scanConfigLocation, JSON.stringify(scanConfig, null, 2));
 
       console.log(chalk.green('✓') + ' Vulnerability scan saved to ' + scanConfigLocation);
+      process.exit(0);
     } catch (error: any) {
       spinner.fail('Vulnerability check failed');
       console.error(chalk.red('Error:'), error.message);
@@ -252,6 +252,7 @@ program
         fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
       }
       console.log(chalk.green('✓') + ' Cursor MCP config updated successfully');
+      process.exit(0);
     } else {
       console.error(chalk.red('Error: Unsupported IDE.'));
       console.log('Please use Cursor for now.');
@@ -386,7 +387,7 @@ program
         createdAt: new Date().toISOString()
       });
       fs.writeFileSync(scanConfigLocation, JSON.stringify(scanConfig, null, 2));
-
+      process.exit(0);
     } catch (error: any) {
       spinner.fail('Batch scan failed');
       console.error(chalk.red('Error:'), error.message);
