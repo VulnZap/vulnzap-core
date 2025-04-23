@@ -45,7 +45,42 @@ program
   .description('Start the MCP security bridge to protect your AI coding')
   .option('--ide <ide-name>', 'Specify IDE integration (cursor, claude-code, windsurf)')
   .option('--port <port>', 'Port to use for MCP server', '3456')
+  /**
+   * Action handler for the 'secure' command.
+   * Starts the MCP security bridge.
+   * If VulnZap is not initialized in the current project, it will 
+   * automatically perform the initialization steps before starting the server.
+   */
   .action(async (options) => {
+    displayBanner();
+
+    const checkAlreadyInitialized = await checkInit();
+    if (!checkAlreadyInitialized) {
+      console.log(chalk.yellow('VulnZap not initialized. Initializing now...'));
+      const spinner = ora('Initializing VulnZap...').start();
+      try {
+        const vulnzapLocation = process.cwd() + '/.vulnzap-core';
+        if (!fs.existsSync(vulnzapLocation)) {
+          fs.mkdirSync(vulnzapLocation);
+        }
+        const scanConfigLocation = vulnzapLocation + '/scans.json';
+        if (!fs.existsSync(scanConfigLocation)) {
+          fs.writeFileSync(scanConfigLocation, JSON.stringify({
+            scans: []
+          }, null, 2));
+        }
+        spinner.succeed('VulnZap initialized successfully.');
+         // Optionally add the env variable hints here if desired
+        // console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB environment variable with your GitHub token'));
+        // console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD environment variable with your NVD token'));
+      } catch (error: any) {
+        spinner.fail('Failed to auto-initialize VulnZap');
+        console.error(chalk.red('Error:'), error.message);
+        process.exit(1);
+      }
+    }
+
+    // Proceed with starting the server
     try {
       await startMcpServer({
         useMcp: options.mcp || true,
