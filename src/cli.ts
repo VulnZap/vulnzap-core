@@ -20,12 +20,21 @@ const version = packageJson.version;
 const program = new Command(); // Instantiate Command
 
 async function checkInit() {
-  const vulnzapLocation = process.cwd() + '/.vulnzap';
+  const vulnzapLocation = process.cwd() + '/.vulnzap-core';
   if (!fs.existsSync(vulnzapLocation)) {
     return false;
   }
   return true;
 }
+
+// Ensure .vulnzap folder exists in the user's home directory
+const ensureVulnzapFolder = () => {
+  const vulnzapHomeDir = join(os.homedir(), '.vulnzap');
+  if (!fs.existsSync(vulnzapHomeDir)) {
+    fs.mkdirSync(vulnzapHomeDir, { recursive: true });
+  }
+};
+ensureVulnzapFolder();
 
 // Banner display
 const displayBanner = () => {
@@ -38,10 +47,10 @@ const displayBanner = () => {
 };
 
 program
-  .name('vulnzap')
+  .name('vulnzap-core')
   .description('Secure your AI-generated code from vulnerabilities in real-time')
   .version(version);
-
+  
 // Command: vulnzap secure (only used by ides to start a connection to the server)
 program
   .command('secure')
@@ -58,7 +67,7 @@ program
     try {
       // log the present working directory in log file at .cursor folder in home dir
       const homedir = os.homedir();
-      const logFile = join(homedir, '.cursor', 'info.log');
+      const logFile = join(homedir, '.vulnzap', 'info.log');
       const logStream = fs.createWriteStream(logFile, { flags: 'a' });
       logStream.write(`VulnZap MCP server initialized by ${options.ide} started in ${process.cwd()} at ${new Date().toISOString()}\n`);
       logStream.end();
@@ -66,7 +75,7 @@ program
       const checkAlreadyInitialized = await checkInit();
       if (!checkAlreadyInitialized) {
         // Automatically initialize the project if not already done
-        const vulnzapLocation = process.cwd() + '/.vulnzap';
+        const vulnzapLocation = process.cwd() + '/.vulnzap-core';
         if (!fs.existsSync(vulnzapLocation)) {
           fs.mkdirSync(vulnzapLocation);
         }
@@ -106,7 +115,7 @@ program
     }
 
     try {
-      const vulnzapLocation = process.cwd() + '/.vulnzap';
+      const vulnzapLocation = process.cwd() + '/.vulnzap-core';
       if (!fs.existsSync(vulnzapLocation)) {
         fs.mkdirSync(vulnzapLocation);
       }
@@ -153,6 +162,12 @@ program
       console.error(chalk.red('Error: VULNZAP_NVD_API_KEY token not found'));
       process.exit(1);
     }
+
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap check command executed for ${packageInput} at ${new Date().toISOString()}\n`);
+    logStream.end();
 
     // Parse package input
     const packageFormat = /^(npm|pip):([^@]+)@(.+)$/;
@@ -223,7 +238,7 @@ program
         }
       }
       const pwd = process.cwd();
-      const scanConfigLocation = pwd + '/.vulnzap/scans.json';
+      const scanConfigLocation = pwd + '/.vulnzap-core/scans.json';
       const scanConfig = JSON.parse(fs.readFileSync(scanConfigLocation, 'utf8'));
       const newScan = {
         package: `${packageName}@${packageVersion}`,
@@ -256,6 +271,13 @@ program
       console.log('Example: vulnzap connect --ide <ide-name>');
       process.exit(1);
     }
+
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap connect command executed for ${options.ide} at ${new Date().toISOString()}\n`);
+    logStream.end();
+    
 
     if (options.ide === 'cursor') {
       const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
@@ -310,6 +332,13 @@ program
       console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
       process.exit(1);
     }
+
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap batch scan command executed in ${process.cwd()} with output file ${options.output} at ${new Date().toISOString()}\n`);
+    logStream.end();
+    
 
     const spinner = ora('Initiating batch vulnerability scan...').start();
     const results: ScanResult[] = [];
@@ -404,7 +433,7 @@ program
       console.log('\nDetailed results saved to:', outputFile);
 
       // Save to vulnzap scans history
-      const scanConfigLocation = join(process.cwd(), '.vulnzap/scans.json');
+      const scanConfigLocation = join(process.cwd(), '.vulnzap-core/scans.json');
       const scanConfig = JSON.parse(fs.readFileSync(scanConfigLocation, 'utf8'));
       scanConfig.scans.push({
         type: 'batch',
