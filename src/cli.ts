@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import os from 'os';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +20,7 @@ const version = packageJson.version;
 const program = new Command(); // Instantiate Command
 
 async function checkInit() {
-  const vulnzapLocation = process.cwd() + '/.vulnzap-core';
+  const vulnzapLocation = process.cwd() + '/.vulnzap';
   if (!fs.existsSync(vulnzapLocation)) {
     return false;
   }
@@ -37,7 +38,7 @@ const displayBanner = () => {
 };
 
 program
-  .name('vulnzap-core')
+  .name('vulnzap')
   .description('Secure your AI-generated code from vulnerabilities in real-time')
   .version(version);
 
@@ -54,84 +55,36 @@ program
    * automatically perform the initialization steps before starting the server.
    */
   .action(async (options) => {
-    let originalConsoleLog;
-
-    // If running for an IDE via stdio, suppress stdout logging
-    if (options.ide) {
-      originalConsoleLog = console.log; // Store original
-      console.log = (..._args: any[]) => {}; // Override console.log with no-op
-    }
-
     try {
-      // Display banner only if not in IDE mode (now handled by console.log override)
-      // if (!options.ide) {
-      //   displayBanner(); 
-      // }
-      displayBanner(); // Keep banner logic, but it won't print if console.log is overridden
+      // log the present working directory in log file at .cursor folder in home dir
+      const homedir = os.homedir();
+      const logFile = join(homedir, '.cursor', 'info.log');
+      const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+      logStream.write(`VulnZap MCP server initialized by ${options.ide} started in ${process.cwd()} at ${new Date().toISOString()}\n`);
+      logStream.end();
 
       const checkAlreadyInitialized = await checkInit();
       if (!checkAlreadyInitialized) {
-        let spinner: Ora | undefined;
-        // Spinner setup logic needs adjustment if console.log is overridden
-        // We can use ora directly, assuming its non-text output goes to stderr or is safe.
-        // Or, just skip the spinner entirely in IDE mode.
-        if (!options.ide) { 
-          console.log(chalk.yellow('VulnZap not initialized. Initializing now...'));
-          spinner = ora('Initializing VulnZap...').start();
-        } else {
-          spinner = ora().start(); // Start spinner silently
+        // Automatically initialize the project if not already done
+        const vulnzapLocation = process.cwd() + '/.vulnzap';
+        if (!fs.existsSync(vulnzapLocation)) {
+          fs.mkdirSync(vulnzapLocation);
         }
-        
-        try {
-          const vulnzapLocation = process.cwd() + '/.vulnzap-core';
-          if (!fs.existsSync(vulnzapLocation)) {
-            fs.mkdirSync(vulnzapLocation);
-          }
-          const scanConfigLocation = vulnzapLocation + '/scans.json';
-          if (!fs.existsSync(scanConfigLocation)) {
-            fs.writeFileSync(scanConfigLocation, JSON.stringify({
-              scans: []
-            }, null, 2));
-          }
-          
-          if (spinner) {
-            if (!options.ide) {
-                spinner.succeed('VulnZap initialized successfully.');
-            } else {
-                spinner.stop(); 
-            }
-          }
-
-          // Environment variable hints also suppressed by console.log override
-          // if (!options.ide) {
-          //   console.log(chalk.yellow('To enable GitHub integration...'));
-          //   console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration...'));
-          // }
-        } catch (error: any) {
-          if (spinner) spinner.fail('Failed to auto-initialize VulnZap'); 
-          console.error(chalk.red('Error:'), error.message); 
-          process.exit(1);
+        const scanConfigLocation = vulnzapLocation + '/scans.json';
+        if (!fs.existsSync(scanConfigLocation)) {
+          fs.writeFileSync(scanConfigLocation, JSON.stringify({
+            scans: []
+          }, null, 2));
         }
       }
-
-      // Proceed with starting the server
       await startMcpServer({
         useMcp: options.mcp || true,
-        ide: options.ide, 
+        ide: options.ide,
         port: parseInt(options.port, 10),
       });
-
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message); // Use console.error for errors
-      if (options.ide && originalConsoleLog) {
-        console.log = originalConsoleLog; // Restore on error
-      }
       process.exit(1);
-    } finally {
-      // Ensure console.log is restored even if startMcpServer runs indefinitely or throws differently
-      if (options.ide && originalConsoleLog) {
-        console.log = originalConsoleLog; 
-      }
     }
   });
 
@@ -153,7 +106,7 @@ program
     }
 
     try {
-      const vulnzapLocation = process.cwd() + '/.vulnzap-core';
+      const vulnzapLocation = process.cwd() + '/.vulnzap';
       if (!fs.existsSync(vulnzapLocation)) {
         fs.mkdirSync(vulnzapLocation);
       }
@@ -250,7 +203,7 @@ program
       for (const vuln of result) {
         if (vuln.isVulnerable) {
           console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities\n`));
-  
+
           // Display vulnerability details
           vuln.advisories?.forEach(advisory => {
             console.log(chalk.yellow(`- ${advisory.title}`));
@@ -259,7 +212,7 @@ program
             console.log(`  Description: ${advisory.description}`);
             console.log('');
           });
-  
+
           // Suggest fixed version if available
           if (vuln.fixedVersions && vuln.fixedVersions.length > 0) {
             console.log(chalk.green('Suggested fix:'));
@@ -270,7 +223,7 @@ program
         }
       }
       const pwd = process.cwd();
-      const scanConfigLocation = pwd + '/.vulnzap-core/scans.json';
+      const scanConfigLocation = pwd + '/.vulnzap/scans.json';
       const scanConfig = JSON.parse(fs.readFileSync(scanConfigLocation, 'utf8'));
       const newScan = {
         package: `${packageName}@${packageVersion}`,
@@ -378,17 +331,17 @@ program
         for (const [name, version] of Object.entries(dependencies)) {
           const cleanVersion = (version as string).replace(/[\^~]/g, '');
           spinner.text = `Scanning ${name}@${cleanVersion}...`;
-          
+
           try {
             const vulnResult = await checkVulnerability('npm', name, cleanVersion);
             totalPackages++;
-            
+
             if (vulnResult.length > 0 && vulnResult.some(r => r.isVulnerable)) {
               vulnerablePackages++;
-              totalVulnerabilities += vulnResult.reduce((acc, r) => 
+              totalVulnerabilities += vulnResult.reduce((acc, r) =>
                 acc + (r.advisories?.length || 0), 0);
             }
-            
+
             results.push({
               ecosystem: 'npm',
               package: name,
@@ -415,17 +368,17 @@ program
 
         for (const pkg of requirements) {
           spinner.text = `Scanning ${pkg.name}@${pkg.version}...`;
-          
+
           try {
             const vulnResult = await checkVulnerability('pip', pkg.name, pkg.version);
             totalPackages++;
-            
+
             if (vulnResult.length > 0 && vulnResult.some(r => r.isVulnerable)) {
               vulnerablePackages++;
-              totalVulnerabilities += vulnResult.reduce((acc, r) => 
+              totalVulnerabilities += vulnResult.reduce((acc, r) =>
                 acc + (r.advisories?.length || 0), 0);
             }
-            
+
             results.push({
               ecosystem: 'pip',
               package: pkg.name,
@@ -451,7 +404,7 @@ program
       console.log('\nDetailed results saved to:', outputFile);
 
       // Save to vulnzap scans history
-      const scanConfigLocation = join(process.cwd(), '.vulnzap-core/scans.json');
+      const scanConfigLocation = join(process.cwd(), '.vulnzap/scans.json');
       const scanConfig = JSON.parse(fs.readFileSync(scanConfigLocation, 'utf8'));
       scanConfig.scans.push({
         type: 'batch',
