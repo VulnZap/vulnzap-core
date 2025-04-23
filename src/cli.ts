@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { program } from 'commander';
+import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora, { Ora } from 'ora';
 import { startMcpServer, checkVulnerability } from './index.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -15,6 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
 const version = packageJson.version;
+
+const program = new Command(); // Instantiate Command
 
 async function checkInit() {
   const vulnzapLocation = process.cwd() + '/.vulnzap-core';
@@ -52,44 +54,84 @@ program
    * automatically perform the initialization steps before starting the server.
    */
   .action(async (options) => {
-    displayBanner();
+    let originalConsoleLog;
 
-    const checkAlreadyInitialized = await checkInit();
-    if (!checkAlreadyInitialized) {
-      console.log(chalk.yellow('VulnZap not initialized. Initializing now...'));
-      const spinner = ora('Initializing VulnZap...').start();
-      try {
-        const vulnzapLocation = process.cwd() + '/.vulnzap-core';
-        if (!fs.existsSync(vulnzapLocation)) {
-          fs.mkdirSync(vulnzapLocation);
-        }
-        const scanConfigLocation = vulnzapLocation + '/scans.json';
-        if (!fs.existsSync(scanConfigLocation)) {
-          fs.writeFileSync(scanConfigLocation, JSON.stringify({
-            scans: []
-          }, null, 2));
-        }
-        spinner.succeed('VulnZap initialized successfully.');
-         // Optionally add the env variable hints here if desired
-        // console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB environment variable with your GitHub token'));
-        // console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD environment variable with your NVD token'));
-      } catch (error: any) {
-        spinner.fail('Failed to auto-initialize VulnZap');
-        console.error(chalk.red('Error:'), error.message);
-        process.exit(1);
-      }
+    // If running for an IDE via stdio, suppress stdout logging
+    if (options.ide) {
+      originalConsoleLog = console.log; // Store original
+      console.log = (..._args: any[]) => {}; // Override console.log with no-op
     }
 
-    // Proceed with starting the server
     try {
+      // Display banner only if not in IDE mode (now handled by console.log override)
+      // if (!options.ide) {
+      //   displayBanner(); 
+      // }
+      displayBanner(); // Keep banner logic, but it won't print if console.log is overridden
+
+      const checkAlreadyInitialized = await checkInit();
+      if (!checkAlreadyInitialized) {
+        let spinner: Ora | undefined;
+        // Spinner setup logic needs adjustment if console.log is overridden
+        // We can use ora directly, assuming its non-text output goes to stderr or is safe.
+        // Or, just skip the spinner entirely in IDE mode.
+        if (!options.ide) { 
+          console.log(chalk.yellow('VulnZap not initialized. Initializing now...'));
+          spinner = ora('Initializing VulnZap...').start();
+        } else {
+          spinner = ora().start(); // Start spinner silently
+        }
+        
+        try {
+          const vulnzapLocation = process.cwd() + '/.vulnzap-core';
+          if (!fs.existsSync(vulnzapLocation)) {
+            fs.mkdirSync(vulnzapLocation);
+          }
+          const scanConfigLocation = vulnzapLocation + '/scans.json';
+          if (!fs.existsSync(scanConfigLocation)) {
+            fs.writeFileSync(scanConfigLocation, JSON.stringify({
+              scans: []
+            }, null, 2));
+          }
+          
+          if (spinner) {
+            if (!options.ide) {
+                spinner.succeed('VulnZap initialized successfully.');
+            } else {
+                spinner.stop(); 
+            }
+          }
+
+          // Environment variable hints also suppressed by console.log override
+          // if (!options.ide) {
+          //   console.log(chalk.yellow('To enable GitHub integration...'));
+          //   console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration...'));
+          // }
+        } catch (error: any) {
+          if (spinner) spinner.fail('Failed to auto-initialize VulnZap'); 
+          console.error(chalk.red('Error:'), error.message); 
+          process.exit(1);
+        }
+      }
+
+      // Proceed with starting the server
       await startMcpServer({
         useMcp: options.mcp || true,
-        ide: options.ide || 'cursor',
+        ide: options.ide, 
         port: parseInt(options.port, 10),
       });
+
     } catch (error: any) {
-      console.error(chalk.red('Error:'), error.message);
+      console.error(chalk.red('Error:'), error.message); // Use console.error for errors
+      if (options.ide && originalConsoleLog) {
+        console.log = originalConsoleLog; // Restore on error
+      }
       process.exit(1);
+    } finally {
+      // Ensure console.log is restored even if startMcpServer runs indefinitely or throws differently
+      if (options.ide && originalConsoleLog) {
+        console.log = originalConsoleLog; 
+      }
     }
   });
 
