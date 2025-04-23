@@ -105,7 +105,10 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
   // Start the server
   await server.connect(transport);
   
-  console.log("VulnZap MCP server started");
+  // Only log if not running in IDE mode
+  if (!config.ide) {
+    console.log("VulnZap MCP server started"); 
+  }
 }
 
 /**
