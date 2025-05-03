@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora, { Ora } from 'ora';
+import inquirer from 'inquirer';
 import { startMcpServer, checkVulnerability } from './index.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -127,8 +128,8 @@ program
       }
       console.log(chalk.green('✓') + ' VulnZap config file created\n');
       spinner.succeed('wohooooo!');
-      console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB environment variable with your GitHub token'));
-      console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD environment variable with your NVD token'));
+      console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB_TOKEN environment variable with your GitHub token'));
+      console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD_API_KEY environment variable with your NVD token'));
       console.log(chalk.green('✓') + ' VulnZap initialized successfully');
     } catch (error: any) {
       spinner.fail('Failed to initialize VulnZap');
@@ -262,7 +263,6 @@ program
   .command('connect')
   .description('Connect VulnZap to your AI-powered IDE')
   .option('--ide <ide-name>', 'IDE to connect with (cursor, claude-code, windsurf)')
-  .option('--port <port>', 'Port to use for MCP server', '3456')
   .action(async (options) => {
     // Prompt for IDE if not provided
 
@@ -287,23 +287,77 @@ program
         process.exit(1);
       }
       const cursorMcpConfig = JSON.parse(fs.readFileSync(cursorMcpConfigLocation, 'utf8'));
+
+      // Display info about API keys and ask if user has both
+      console.log(chalk.cyan('To use the connect command, you need both a GitHub token and an NVD API key.'));
+      console.log(chalk.yellow('GitHub token: https://github.com/settings/tokens'));
+      console.log(chalk.yellow('NVD API key: https://nvd.nist.gov/developers/request-an-api-key'));
+      console.log('\nBoth keys are required for full functionality.');
+      const { hasKeys } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'hasKeys',
+          message: 'Do you have both the GitHub token and NVD API key?',
+          default: false,
+        },
+      ]);
+      if (!hasKeys) {
+        console.log(chalk.red('Please obtain both API keys before proceeding.'));
+        process.exit(1);
+      }
+
+      // Prompt for GitHub and NVD API keys
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'githubToken',
+          message: 'Enter your GitHub token:',
+        },
+        {
+          type: 'input',
+          name: 'nvdApiKey',
+          message: 'Enter your NVD API key:',
+        },
+      ]);
+
+      let missing = false;
+      if (!answers.githubToken) {
+        console.log(chalk.yellow('You can generate a GitHub token at: https://github.com/settings/tokens'));
+        missing = true;
+      }
+      if (!answers.nvdApiKey) {
+        console.log(chalk.yellow('You can request an NVD API key at: https://nvd.nist.gov/developers/request-an-api-key'));
+        missing = true;
+      }
+      if (missing) {
+        console.error(chalk.red('Error: Both API keys are required to proceed.'));
+        process.exit(1);
+      }
+
+      // Save tokens in mcp.json
       if (!cursorMcpConfig.mcp) {
-        fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify({
-          mcpServers: {
-            VulnZap: {
-              command: "vulnzap",
-              args: ["secure", "--ide", "cursor", "--port", "3456"]
+        cursorMcpConfig.mcpServers = {
+          VulnZap: {
+            command: "vulnzap",
+            args: ["secure", "--ide", "cursor", "--port", "3456"],
+            env: {
+              VULNZAP_GITHUB_TOKEN: answers.githubToken,
+              VULNZAP_NVD_API_KEY: answers.nvdApiKey
             }
           }
-        }, null, 2));
+        };
       } else {
         cursorMcpConfig.mcpServers.VulnZap = {
           command: "vulnzap",
-          args: ["secure", "--ide", "cursor", "--port", "3456"]
-        }
-        fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
+          args: ["secure", "--ide", "cursor", "--port", "3456"],
+          env: {
+            VULNZAP_GITHUB_TOKEN: answers.githubToken,
+            VULNZAP_NVD_API_KEY: answers.nvdApiKey
+          }
+        };
       }
-      console.log(chalk.green('✓') + ' Cursor MCP config updated successfully');
+      fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
+      console.log(chalk.green('✓') + ' Cursor MCP config updated successfully with API keys');
       process.exit(0);
     } else {
       console.error(chalk.red('Error: Unsupported IDE.'));
