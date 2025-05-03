@@ -1,6 +1,6 @@
 {
   "name": "vulnzap-core",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "Secure AI-generated code by intercepting vulnerabilities in real-time",
   "main": "dist/cli.js",
   "types": "dist/index.d.ts",

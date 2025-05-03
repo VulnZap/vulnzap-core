@@ -3,12 +3,14 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora, { Ora } from 'ora';
+import inquirer from 'inquirer';
 import { startMcpServer, checkVulnerability } from './index.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import os from 'os';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -26,6 +28,15 @@ async function checkInit() {
   return true;
 }
 
+// Ensure .vulnzap folder exists in the user's home directory
+const ensureVulnzapFolder = () => {
+  const vulnzapHomeDir = join(os.homedir(), '.vulnzap');
+  if (!fs.existsSync(vulnzapHomeDir)) {
+    fs.mkdirSync(vulnzapHomeDir, { recursive: true });
+  }
+};
+ensureVulnzapFolder();
+
 // Banner display
 const displayBanner = () => {
   console.log(chalk.bold(`
@@ -40,7 +51,7 @@ program
   .name('vulnzap-core')
   .description('Secure your AI-generated code from vulnerabilities in real-time')
   .version(version);
-
+  
 // Command: vulnzap secure (only used by ides to start a connection to the server)
 program
   .command('secure')
@@ -54,84 +65,36 @@ program
    * automatically perform the initialization steps before starting the server.
    */
   .action(async (options) => {
-    let originalConsoleLog;
-
-    // If running for an IDE via stdio, suppress stdout logging
-    if (options.ide) {
-      originalConsoleLog = console.log; // Store original
-      console.log = (..._args: any[]) => {}; // Override console.log with no-op
-    }
-
     try {
-      // Display banner only if not in IDE mode (now handled by console.log override)
-      // if (!options.ide) {
-      //   displayBanner(); 
-      // }
-      displayBanner(); // Keep banner logic, but it won't print if console.log is overridden
+      // log the present working directory in log file at .cursor folder in home dir
+      const homedir = os.homedir();
+      const logFile = join(homedir, '.vulnzap', 'info.log');
+      const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+      logStream.write(`VulnZap MCP server initialized by ${options.ide} started in ${process.cwd()} at ${new Date().toISOString()}\n`);
+      logStream.end();
 
       const checkAlreadyInitialized = await checkInit();
       if (!checkAlreadyInitialized) {
-        let spinner: Ora | undefined;
-        // Spinner setup logic needs adjustment if console.log is overridden
-        // We can use ora directly, assuming its non-text output goes to stderr or is safe.
-        // Or, just skip the spinner entirely in IDE mode.
-        if (!options.ide) { 
-          console.log(chalk.yellow('VulnZap not initialized. Initializing now...'));
-          spinner = ora('Initializing VulnZap...').start();
-        } else {
-          spinner = ora().start(); // Start spinner silently
+        // Automatically initialize the project if not already done
+        const vulnzapLocation = process.cwd() + '/.vulnzap-core';
+        if (!fs.existsSync(vulnzapLocation)) {
+          fs.mkdirSync(vulnzapLocation);
         }
-        
-        try {
-          const vulnzapLocation = process.cwd() + '/.vulnzap-core';
-          if (!fs.existsSync(vulnzapLocation)) {
-            fs.mkdirSync(vulnzapLocation);
-          }
-          const scanConfigLocation = vulnzapLocation + '/scans.json';
-          if (!fs.existsSync(scanConfigLocation)) {
-            fs.writeFileSync(scanConfigLocation, JSON.stringify({
-              scans: []
-            }, null, 2));
-          }
-          
-          if (spinner) {
-            if (!options.ide) {
-                spinner.succeed('VulnZap initialized successfully.');
-            } else {
-                spinner.stop(); 
-            }
-          }
-
-          // Environment variable hints also suppressed by console.log override
-          // if (!options.ide) {
-          //   console.log(chalk.yellow('To enable GitHub integration...'));
-          //   console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration...'));
-          // }
-        } catch (error: any) {
-          if (spinner) spinner.fail('Failed to auto-initialize VulnZap'); 
-          console.error(chalk.red('Error:'), error.message); 
-          process.exit(1);
+        const scanConfigLocation = vulnzapLocation + '/scans.json';
+        if (!fs.existsSync(scanConfigLocation)) {
+          fs.writeFileSync(scanConfigLocation, JSON.stringify({
+            scans: []
+          }, null, 2));
         }
       }
-
-      // Proceed with starting the server
       await startMcpServer({
         useMcp: options.mcp || true,
-        ide: options.ide, 
+        ide: options.ide,
         port: parseInt(options.port, 10),
       });
-
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message); // Use console.error for errors
-      if (options.ide && originalConsoleLog) {
-        console.log = originalConsoleLog; // Restore on error
-      }
       process.exit(1);
-    } finally {
-      // Ensure console.log is restored even if startMcpServer runs indefinitely or throws differently
-      if (options.ide && originalConsoleLog) {
-        console.log = originalConsoleLog; 
-      }
     }
   });
 
@@ -165,8 +128,8 @@ program
       }
       console.log(chalk.green('✓') + ' VulnZap config file created\n');
       spinner.succeed('wohooooo!');
-      console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB environment variable with your GitHub token'));
-      console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD environment variable with your NVD token'));
+      console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB_TOKEN environment variable with your GitHub token'));
+      console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD_API_KEY environment variable with your NVD token'));
       console.log(chalk.green('✓') + ' VulnZap initialized successfully');
     } catch (error: any) {
       spinner.fail('Failed to initialize VulnZap');
@@ -200,6 +163,12 @@ program
       console.error(chalk.red('Error: VULNZAP_NVD_API_KEY token not found'));
       process.exit(1);
     }
+
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap check command executed for ${packageInput} at ${new Date().toISOString()}\n`);
+    logStream.end();
 
     // Parse package input
     const packageFormat = /^(npm|pip):([^@]+)@(.+)$/;
@@ -250,7 +219,7 @@ program
       for (const vuln of result) {
         if (vuln.isVulnerable) {
           console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities\n`));
-  
+
           // Display vulnerability details
           vuln.advisories?.forEach(advisory => {
             console.log(chalk.yellow(`- ${advisory.title}`));
@@ -259,7 +228,7 @@ program
             console.log(`  Description: ${advisory.description}`);
             console.log('');
           });
-  
+
           // Suggest fixed version if available
           if (vuln.fixedVersions && vuln.fixedVersions.length > 0) {
             console.log(chalk.green('Suggested fix:'));
@@ -294,7 +263,6 @@ program
   .command('connect')
   .description('Connect VulnZap to your AI-powered IDE')
   .option('--ide <ide-name>', 'IDE to connect with (cursor, claude-code, windsurf)')
-  .option('--port <port>', 'Port to use for MCP server', '3456')
   .action(async (options) => {
     // Prompt for IDE if not provided
 
@@ -304,6 +272,13 @@ program
       process.exit(1);
     }
 
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap connect command executed for ${options.ide} at ${new Date().toISOString()}\n`);
+    logStream.end();
+    
+
     if (options.ide === 'cursor') {
       const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
       if (!fs.existsSync(cursorMcpConfigLocation)) {
@@ -312,23 +287,77 @@ program
         process.exit(1);
       }
       const cursorMcpConfig = JSON.parse(fs.readFileSync(cursorMcpConfigLocation, 'utf8'));
+
+      // Display info about API keys and ask if user has both
+      console.log(chalk.cyan('To use the connect command, you need both a GitHub token and an NVD API key.'));
+      console.log(chalk.yellow('GitHub token: https://github.com/settings/tokens'));
+      console.log(chalk.yellow('NVD API key: https://nvd.nist.gov/developers/request-an-api-key'));
+      console.log('\nBoth keys are required for full functionality.');
+      const { hasKeys } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'hasKeys',
+          message: 'Do you have both the GitHub token and NVD API key?',
+          default: false,
+        },
+      ]);
+      if (!hasKeys) {
+        console.log(chalk.red('Please obtain both API keys before proceeding.'));
+        process.exit(1);
+      }
+
+      // Prompt for GitHub and NVD API keys
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'githubToken',
+          message: 'Enter your GitHub token:',
+        },
+        {
+          type: 'input',
+          name: 'nvdApiKey',
+          message: 'Enter your NVD API key:',
+        },
+      ]);
+
+      let missing = false;
+      if (!answers.githubToken) {
+        console.log(chalk.yellow('You can generate a GitHub token at: https://github.com/settings/tokens'));
+        missing = true;
+      }
+      if (!answers.nvdApiKey) {
+        console.log(chalk.yellow('You can request an NVD API key at: https://nvd.nist.gov/developers/request-an-api-key'));
+        missing = true;
+      }
+      if (missing) {
+        console.error(chalk.red('Error: Both API keys are required to proceed.'));
+        process.exit(1);
+      }
+
+      // Save tokens in mcp.json
       if (!cursorMcpConfig.mcp) {
-        fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify({
-          mcpServers: {
-            VulnZap: {
-              command: "vulnzap",
-              args: ["secure", "--ide", "cursor", "--port", "3456"]
+        cursorMcpConfig.mcpServers = {
+          VulnZap: {
+            command: "vulnzap",
+            args: ["secure", "--ide", "cursor", "--port", "3456"],
+            env: {
+              VULNZAP_GITHUB_TOKEN: answers.githubToken,
+              VULNZAP_NVD_API_KEY: answers.nvdApiKey
             }
           }
-        }, null, 2));
+        };
       } else {
         cursorMcpConfig.mcpServers.VulnZap = {
           command: "vulnzap",
-          args: ["secure", "--ide", "cursor", "--port", "3456"]
-        }
-        fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
+          args: ["secure", "--ide", "cursor", "--port", "3456"],
+          env: {
+            VULNZAP_GITHUB_TOKEN: answers.githubToken,
+            VULNZAP_NVD_API_KEY: answers.nvdApiKey
+          }
+        };
       }
-      console.log(chalk.green('✓') + ' Cursor MCP config updated successfully');
+      fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
+      console.log(chalk.green('✓') + ' Cursor MCP config updated successfully with API keys');
       process.exit(0);
     } else {
       console.error(chalk.red('Error: Unsupported IDE.'));
@@ -358,6 +387,13 @@ program
       process.exit(1);
     }
 
+    // Log the event
+    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    logStream.write(`VulnZap batch scan command executed in ${process.cwd()} with output file ${options.output} at ${new Date().toISOString()}\n`);
+    logStream.end();
+    
+
     const spinner = ora('Initiating batch vulnerability scan...').start();
     const results: ScanResult[] = [];
     let totalPackages = 0;
@@ -378,17 +414,17 @@ program
         for (const [name, version] of Object.entries(dependencies)) {
           const cleanVersion = (version as string).replace(/[\^~]/g, '');
           spinner.text = `Scanning ${name}@${cleanVersion}...`;
-          
+
           try {
             const vulnResult = await checkVulnerability('npm', name, cleanVersion);
             totalPackages++;
-            
+
             if (vulnResult.length > 0 && vulnResult.some(r => r.isVulnerable)) {
               vulnerablePackages++;
-              totalVulnerabilities += vulnResult.reduce((acc, r) => 
+              totalVulnerabilities += vulnResult.reduce((acc, r) =>
                 acc + (r.advisories?.length || 0), 0);
             }
-            
+
             results.push({
               ecosystem: 'npm',
               package: name,
@@ -415,17 +451,17 @@ program
 
         for (const pkg of requirements) {
           spinner.text = `Scanning ${pkg.name}@${pkg.version}...`;
-          
+
           try {
             const vulnResult = await checkVulnerability('pip', pkg.name, pkg.version);
             totalPackages++;
-            
+
             if (vulnResult.length > 0 && vulnResult.some(r => r.isVulnerable)) {
               vulnerablePackages++;
-              totalVulnerabilities += vulnResult.reduce((acc, r) => 
+              totalVulnerabilities += vulnResult.reduce((acc, r) =>
                 acc + (r.advisories?.length || 0), 0);
             }
-            
+
             results.push({
               ecosystem: 'pip',
               package: pkg.name,

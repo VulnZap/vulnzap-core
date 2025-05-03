@@ -197,6 +197,19 @@ function setupVulnerabilityResource(server: McpServer): void {
       }).describe("A object containing the command, packageName, and version which the agent is trying to install")
     },
     async ({ parameters }) => {
+
+      const githubToken = process.env.VULNZAP_GITHUB_TOKEN;
+      const nvdToken = process.env.VULNZAP_NVD_API_KEY;
+
+      if (!githubToken || !nvdToken) {
+        return {
+          content: [{
+            type: "text",
+            text: `Error: Missing API keys. Please set VULNZAP_GITHUB_TOKEN and VULNZAP_NVD_API_KEY in your environment variables.`
+          }]
+        };
+      }
+
       try {
         const { command, packageName, ecosystem, version } = parameters;
         
